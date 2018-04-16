@@ -1,5 +1,5 @@
 { nixpkgs ? import <nixpkgs> {}
-, compiler ? "default" 
+, compiler ? "default"
 }:
 let
   inherit (nixpkgs) pkgs;
