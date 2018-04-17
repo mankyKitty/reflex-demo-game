@@ -33,32 +33,39 @@ projectedSliceHeight s rc fov =
   in
     (s ^. sqSide . to fromIntegral) / (d * pd)
 
-mkFov :: FOV
-mkFov = undefined
+mkFov :: Height -> Width -> Angle -> FOV
+mkFov h w a = FOV h w (calcFovDistance w a) a
 
 calcFovDistance
-  :: Double
-  -> Double
-  -> Int
-calcFovDistance w a =
-  floor $ w * tan ((pi / 180) * a)
+  :: Width
+  -> Angle
+  -> Distance
+calcFovDistance (Width w) (Angle a) =
+  let
+    w' = fromIntegral w
+    a' = fromIntegral a
+  in
+    Distance $ (w' / 2) * tan ((pi / 180) * a')
 
 inBnds :: (Word8, Word8) -> Bool
 inBnds (x,y) = b x && b y
-  where
-    b a = a >= 1 && a <= 7
+  where b a = a >= 1 && a <= 7
 
-room :: Room
-room = Room $ cap : replicate 6 inner <> [cap]
-  where
+room1 :: Room
+room1 =
+  let
     w = Sqr Wall 64
-
-    inner = w : replicate 6 (Sqr Floor 64) <> [w]
-
-    cap = replicate 8 w
-
-ppos :: (Word8, Word8)
-ppos = (4, 4)
+    f = Sqr Floor 64
+  in
+    Room [ [w,w,w,w,w,w,w,w]
+         , [w,f,w,f,f,f,f,w]
+         , [w,f,f,f,f,w,f,w]
+         , [w,f,f,f,f,w,f,w]
+         , [w,f,f,f,f,f,f,w]
+         , [w,f,f,w,w,w,w,w]
+         , [w,w,f,f,f,f,f,w]
+         , [w,w,w,w,w,w,w,w]
+         ]
 
 w8ix
   :: ( Applicative f

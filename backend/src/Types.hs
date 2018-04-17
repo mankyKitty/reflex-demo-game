@@ -9,11 +9,15 @@ import           Linear.V2
 
 import           GHC.Word     (Word8)
 
+newtype Height = Height Int
+newtype Width = Width Int
+newtype Angle = Angle Int
+
 data FOV = FOV
-  { _fovHeight   :: Int
-  , _fovWidth    :: Int
+  { _fovHeight   :: Height
+  , _fovWidth    :: Width
   , _fovDistance :: Distance
-  , _fovAngle    :: Int
+  , _fovAngle    :: Angle
   }
 
 data SqType
@@ -31,17 +35,17 @@ data Sqr = Sqr
   { _sqType :: SqType
   , _sqSide :: Word8
   }
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Sqr where
+  show (Sqr st _) = show st
 
 newtype Room = Room
   { unRoom :: [[Sqr]]
   }
 
 instance Show Room where
-  show = unlines
-    . fmap unwords
-    . (fmap . fmap) show
-    . unRoom
+  show = unlines . fmap unwords . (fmap . fmap) show . unRoom
 
 atPos :: V2 Int -> Room -> Maybe Sqr
 atPos (V2 x y) r = r ^? to unRoom . ix x . ix y
@@ -94,6 +98,9 @@ newtype Distance = Distance Double
   deriving (Eq, Ord, Show)
 
 makeWrapped ''Distance
+makeWrapped ''Height
+makeWrapped ''Width
+makeWrapped ''Angle
 
 makeLenses ''P
 makeLenses ''Sqr

@@ -19,6 +19,7 @@ library
   exposed-modules:     Lib
 
   other-modules:       RayCaster
+                     , Types
 
   -- other-extensions:
   build-depends:       base >=4.9 && <4.12
