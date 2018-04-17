@@ -21,7 +21,7 @@ library
                      , Types
 
   -- other-extensions:
-  build-depends:       base >=4.9 && <4.12
+  build-depends:       base >=4.9 && <4.11
                      , lens
                      , linear
                      , containers
