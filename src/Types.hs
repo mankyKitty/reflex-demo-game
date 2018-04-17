@@ -1,10 +1,20 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Types where
 
-import           Control.Lens (makeLenses, to, (^.), ix, (^?))
+import           Control.Lens (ix, makeLenses, makeWrapped, to, (^.), (^?))
 import           Linear.V2
 
 import           GHC.Word     (Word8)
+
+data FOV = FOV
+  { _fovHeight   :: Int
+  , _fovWidth    :: Int
+  , _fovDistance :: Distance
+  , _fovAngle    :: Int
+  }
 
 data SqType
   = Wall
@@ -21,12 +31,17 @@ data Sqr = Sqr
   { _sqType :: SqType
   , _sqSide :: Word8
   }
-  deriving Eq
-makeLenses ''Sqr
+  deriving (Eq, Show)
 
 newtype Room = Room
   { unRoom :: [[Sqr]]
   }
+
+instance Show Room where
+  show = unlines
+    . fmap unwords
+    . (fmap . fmap) show
+    . unRoom
 
 atPos :: V2 Int -> Room -> Maybe Sqr
 atPos (V2 x y) r = r ^? to unRoom . ix x . ix y
@@ -35,7 +50,6 @@ data P = P
   { _playerPosition :: V2 Double
   , _playerFacing   :: Double
   }
-makeLenses ''P
 
 newtype Ray = Ray
   { unRay :: Double
@@ -46,7 +60,7 @@ newtype RayBeta = RayBeta
   }
 
 data RayCast = RayCast
-  { _rayCaseDistance :: Distance
+  { _rayCastDistance :: Distance
   , _rayCastEnd      :: V2 Double
   , _rayCastEndSqr   :: Sqr
   }
@@ -78,3 +92,10 @@ newtype StepSize = StepSize Int deriving Show
 
 newtype Distance = Distance Double
   deriving (Eq, Ord, Show)
+
+makeWrapped ''Distance
+
+makeLenses ''P
+makeLenses ''Sqr
+makeLenses ''FOV
+makeLenses ''RayCast

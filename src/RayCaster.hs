@@ -63,7 +63,9 @@ horizontalFirstX p (HorizAY ay) (Ray alpha) =
     x = p ^. playerPosition . _x
     y = p ^. playerPosition . _y
   in
-    HorizAX . floor $ x + (y - fromIntegral ay)
+    HorizAX . floor $
+
+    x + (y - fromIntegral ay)
       /
     tan ((pi / 180) * alpha)
 
@@ -172,10 +174,9 @@ toTheWall
   -> Maybe (V2 Double, Sqr)
 toTheWall stepFn dirStep rm s v@(V2 x y) =
   case atPos (toRoomCoord s x y) rm of
-    Nothing -> Nothing
-    Just sq -> if _sqType sq == Wall
-      then Just (V2 (fromIntegral x) (fromIntegral y), sq)
-      else toTheWall stepFn dirStep rm s (stepFn v s dirStep)
+    Just sq@Sqr { _sqType = Wall } -> Just (V2 (fromIntegral x) (fromIntegral y), sq)
+    Just _                         -> toTheWall stepFn dirStep rm s (stepFn v s dirStep)
+    Nothing                        -> Nothing
 
 distanceTo
   :: P
@@ -193,17 +194,14 @@ castSingleRay
   -> Maybe RayCast
 castSingleRay rm s ray rayBeta p =
   let
-    hWall = toTheWall stepHorizontalIntersection (horizontalIntersectionStepSize ray s) rm s
-    vWall = toTheWall stepVerticalIntersection (verticalIntersectionStepSize ray s) rm s
-
     (HorizAY haY1) = horizontalFirstY ray p s
     (HorizAX haX1) = horizontalFirstX p (HorizAY haY1) ray
 
     (VertAX vaX1) = verticalFirstX ray p s
     (VertAY vaY1) = verticalFirstY p (VertAX vaX1) ray
 
-    mHWallPos = hWall (V2 haX1 haY1)
-    mVWallPos = vWall (V2 vaX1 vaY1)
+    mHWallPos = toTheWall stepHorizontalIntersection (horizontalIntersectionStepSize ray s) rm s (V2 haX1 haY1)
+    mVWallPos = toTheWall stepVerticalIntersection (verticalIntersectionStepSize ray s) rm s (V2 vaX1 vaY1)
 
     hDist = distanceTo p mHWallPos
     vDist = distanceTo p mVWallPos

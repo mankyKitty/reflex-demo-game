@@ -1,15 +1,15 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell   #-}
 module Lib where
 
-import           Prelude             (Bool, Eq, Num, Show (..), fromIntegral,
-                                      otherwise, (&&), (<=), (>=))
+import           Prelude             (Bool, Double, Eq, Int, Num, Show (..),
+                                      floor, fromIntegral, otherwise, pi, tan,
+                                      undefined, (&&), (*), (/), (<=), (>=))
 
 import           Control.Applicative (Applicative)
 import           Control.Category    ((.))
-import           Control.Lens        (Index, IxValue, Ixed, ix, makeLenses,
-                                      (.~))
+import           Control.Lens        (Index, IxValue, Ixed, ix, to, (.~), (^.),
+                                      _Wrapped)
 import           Data.Function       (($), (&))
 import           Data.Functor        (fmap, (<$>))
 import           Data.Semigroup      ((<>))
@@ -18,38 +18,30 @@ import           GHC.Word            (Word8)
 import           Data.List           (replicate)
 import           Data.String         (unlines, unwords)
 
-import RayCaster
+import           RayCaster
+import           Types
 
-data SqType
-  = Wall
-  | Floor
-  | Player
-  deriving Eq
+projectedSliceHeight
+  :: Sqr
+  -> RayCast
+  -> FOV
+  -> Double
+projectedSliceHeight s rc fov =
+  let
+    d = rc ^. rayCastDistance . _Wrapped
+    pd = fov ^. fovDistance . _Wrapped
+  in
+    (s ^. sqSide . to fromIntegral) / (d * pd)
 
-instance Show SqType where
-  show Wall   = "="
-  show Floor  = "."
-  show Player = "o"
+mkFov :: FOV
+mkFov = undefined
 
-data Sqr = Sqr
-  { _sqType :: SqType
-  , _sqSide :: Word8
-  }
-  deriving Eq
-makeLenses ''Sqr
-
-instance Show Sqr where
-  show (Sqr t _) = show t
-
-newtype Room = R
-  { unRoom :: [[Sqr]]
-  }
-
-instance Show Room where
-  show = unlines
-    . fmap unwords
-    . (fmap . fmap) show
-    . unRoom
+calcFovDistance
+  :: Double
+  -> Double
+  -> Int
+calcFovDistance w a =
+  floor $ w * tan ((pi / 180) * a)
 
 inBnds :: (Word8, Word8) -> Bool
 inBnds (x,y) = b x && b y
@@ -57,7 +49,7 @@ inBnds (x,y) = b x && b y
     b a = a >= 1 && a <= 7
 
 room :: Room
-room = R $ cap : replicate 6 inner <> [cap]
+room = Room $ cap : replicate 6 inner <> [cap]
   where
     w = Sqr Wall 64
 
@@ -80,6 +72,6 @@ w8ix
 w8ix w = ix (fromIntegral w)
 
 setPos :: SqType -> (Word8, Word8) -> Room -> Room
-setPos st p@(c,r) (R rr)
-  | inBnds p = R (rr & w8ix c . w8ix r . sqType .~ st)
-  | otherwise = R rr
+setPos st p@(c,r) (Room rr)
+  | inBnds p = Room (rr & w8ix c . w8ix r . sqType .~ st)
+  | otherwise = Room rr
