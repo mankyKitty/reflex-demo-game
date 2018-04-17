@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Lib where
+module RayWut where
 
 import           Prelude             (Bool, Double, Eq, Int, Num, Show (..),
                                       floor, fromIntegral, otherwise, pi, tan,
