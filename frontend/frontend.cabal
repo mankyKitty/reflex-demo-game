@@ -21,8 +21,20 @@ executable frontend
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
                      , common
+                     , lens
+                     , containers
+                     , text
+                     , bytestring
                      , reflex
                      , reflex-dom
+                     , reflex-dom-core
+                     , jsaddle-warp
+                     , jsaddle-dom
+                     , reflex-dom-canvas
+                     , mtl
+                     , linear
+                     , monad-par
+                     , monad-par-extras
 
   hs-source-dirs:      src
   main-is:             Main.hs

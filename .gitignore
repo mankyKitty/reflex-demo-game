@@ -21,3 +21,4 @@ cabal.project.local
 .ghc.environment.*
 # Nix bits
 result
+reflex-platform

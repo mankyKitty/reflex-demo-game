@@ -1,9 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 module RayWut where
 
 import           Prelude             (Bool, Double, Eq, Int, Num, Show (..),
-                                      floor, fromIntegral, otherwise, pi, tan,
+                                      floor, fromIntegral, otherwise, pi, tan, ceiling,
                                       undefined, (&&), (*), (/), (<=), (>=))
 
 import           Control.Applicative (Applicative)
@@ -21,8 +22,17 @@ import           Data.String         (unlines, unwords)
 import           RayCaster
 import           Types
 
+-- $setup
+-- >>> import Linear.V2 (V2 (V2))
+-- >>> let sqrSize = (64 :: Int)
+-- >>> let fov = mkFov (Height 200) (Width 320) (Angle 60)
+-- >>> let rCast = RayCast (Distance 330) (Sqr Wall 64)
+
+-- |
+-- >>> projectedSliceHeight sqrSize rCast fov
+-- 54.0
 projectedSliceHeight
-  :: Sqr
+  :: Int
   -> RayCast
   -> FOV
   -> Double
@@ -31,11 +41,18 @@ projectedSliceHeight s rc fov =
     d = rc ^. rayCastDistance . _Wrapped
     pd = fov ^. fovDistance . _Wrapped
   in
-    (s ^. sqSide . to fromIntegral) / (d * pd)
+    fromIntegral . ceiling $ fromIntegral s / d * pd
 
+-- |
+-- >>> mkFov (Height 200) (Width 320) (Angle 60)
+-- FOV {_fovHeight = Height 200, _fovWidth = Width 320, _fovDistance = Distance 277.0, _fovAngle = Angle 60}
 mkFov :: Height -> Width -> Angle -> FOV
 mkFov h w a = FOV h w (calcFovDistance w a) a
 
+-- |
+-- >>> calcFovDistance (Width 320) (Angle 60)
+-- Distance 277.0
+--
 calcFovDistance
   :: Width
   -> Angle
@@ -43,42 +60,16 @@ calcFovDistance
 calcFovDistance (Width w) (Angle a) =
   let
     w' = fromIntegral w
-    a' = fromIntegral a
   in
-    Distance $ (w' / 2) * tan ((pi / 180) * a')
+    Distance . fromIntegral . floor $ (w' / 2) / tan ((a / 2) * pi / 180)
 
 inBnds :: (Word8, Word8) -> Bool
 inBnds (x,y) = b x && b y
   where b a = a >= 1 && a <= 7
 
-room1 :: Room
-room1 =
-  let
-    w = Sqr Wall 64
-    f = Sqr Floor 64
-  in
-    Room [ [w,w,w,w,w,w,w,w]
-         , [w,f,w,f,f,f,f,w]
-         , [w,f,f,f,f,w,f,w]
-         , [w,f,f,f,f,w,f,w]
-         , [w,f,f,f,f,f,f,w]
-         , [w,f,f,w,w,w,w,w]
-         , [w,w,f,f,f,f,f,w]
-         , [w,w,w,w,w,w,w,w]
-         ]
-
-w8ix
-  :: ( Applicative f
-     , Num (Index m)
-     , Ixed m
-     )
-  => Word8
-  -> (IxValue m -> f (IxValue m))
-  -> m
-  -> f m
-w8ix w = ix (fromIntegral w)
-
 setPos :: SqType -> (Word8, Word8) -> Room -> Room
 setPos st p@(c,r) (Room rr)
   | inBnds p = Room (rr & w8ix c . w8ix r . sqType .~ st)
   | otherwise = Room rr
+  where w8ix w = ix (fromIntegral w)
+
