@@ -29,6 +29,9 @@ instance Bounded Angle where
   minBound = Angle 0
   maxBound = Angle 360
 
+toRadians :: Angle -> Double
+toRadians (Angle a) = (pi/180) * a
+
 addAngle :: Angle -> Angle -> Angle
 addAngle (Angle a) (Angle b) =
   if 360 >= a + b then Angle (a + b)

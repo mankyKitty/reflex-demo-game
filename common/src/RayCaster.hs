@@ -79,7 +79,7 @@ horizontalFirstX p (HorizAY ay) (Ray alpha) =
     x = p ^. playerPosition . _x
     y = p ^. playerPosition . _y
   in
-    HorizAX . floor $ x + (y - fromIntegral ay) / tan ((pi / 180) * alpha)
+    HorizAX . floor $ x + (y - fromIntegral ay) / tan (toRadians . Angle $ alpha)
 
 -- |
 -- Find coordinate of the first intersection (point B in this example).
@@ -129,7 +129,7 @@ verticalFirstY p (VertAX ax) (Ray alpha) =
     x = p ^. playerPosition . _x
     y = p ^. playerPosition . _y
   in
-    VertAY . floor $ y + (x - fromIntegral ax) * tan (alpha * pi / 180)
+    VertAY . floor $ y + (x - fromIntegral ax) * tan (toRadians . Angle $ alpha)
 
 -- |
 -- Note: Ya,Xa is just the height/width of the grid.
@@ -183,11 +183,9 @@ verticalIntersectionStepSize = directionStepSize VertStep snd
 -- >>> stepHorizontalIntersection (V2 292 64) sqrSize (Ray 60.0)
 -- V2 328 0
 -- >>> stepHorizontalIntersection (V2 161 256) sqrSize ray3
--- V2 286 320
--- >>> stepHorizontalIntersection (V2 286 320) sqrSize ray3
--- V2 411 384
--- >>> stepHorizontalIntersection (V2 410 384) sqrSize ray3
--- V2 535 448
+-- V2 36 320
+-- >>> stepHorizontalIntersection (V2 36 320) sqrSize ray3
+-- V2 (-89) 384
 stepHorizontalIntersection
   :: V2 Int
   -> Int
@@ -204,7 +202,7 @@ stepHorizontalIntersection v s ray@(Ray a) =
       | otherwise       = n
 
     (HorizStep ya) = horizontalIntersectionStepSize ray s
-    xa = floop . floor $ (fromIntegral s) / tan (a * pi / 180)
+    xa = floop . floor $ (fromIntegral s) / tan (toRadians . Angle $ a)
   in
   v & _x +~ xa
     & _y +~ ya
@@ -212,14 +210,14 @@ stepHorizontalIntersection v s ray@(Ray a) =
 -- |
 -- >>> stepVerticalIntersection (V2 128 205) sqrSize (Ray 60.0)
 -- V2 192 95
--- >>> stepVerticalIntersection (V2 191 240) sqrSize ray3
--- V2 316 176
--- >>> stepVerticalIntersection (V2 316 176) sqrSize ray3
--- V2 441 112
--- >>> stepVerticalIntersection (V2 441 112) sqrSize ray3
--- V2 566 48
+-- >>> stepVerticalIntersection (V2 191 95) sqrSize ray3
+-- V2 127 127
+-- >>> stepVerticalIntersection (V2 127 127) sqrSize ray3
+-- V2 63 159
+-- >>> stepVerticalIntersection (V2 63 159) sqrSize ray3
+-- V2 (-1) 191
 -- >>> stepVerticalIntersection (V2 191 4) sqrSize (Ray 102.0)
--- V2 127 (-302)
+-- V2 127 (-298)
 stepVerticalIntersection
   :: V2 Int
   -> Int
@@ -229,13 +227,13 @@ stepVerticalIntersection v s r@(Ray a) =
   let
     d = fst . rayDir $ r
 
-    ifUp n
-      | n < 0 && d == U = n
+    floop n
       | n < 0 && d == D = negate n
-      | d == U = negate n
-      | otherwise = n
+      | n < 0 && d == U = n
+      | d == U          = negate n
+      | otherwise       = n
 
-    ya = ifUp . floor $ (fromIntegral s) * tan (a * pi / 180)
+    ya = floop . floor $ (fromIntegral s) * tan (toRadians . Angle $ a)
     (VertStep xa) = verticalIntersectionStepSize r s
   in
   v & _x +~ xa
@@ -342,7 +340,6 @@ finaliseRay
   -> RayCast
 finaliseRay player rbeta sqrSize mRayInter =
   let
-    -- finalDist = distanceTo player mRayInter
     finalDist = correctDistance (distanceTo player mRayInter) rbeta
     def = RayCast finalDist (Sqr Wall (fromIntegral sqrSize))
   in
@@ -374,4 +371,4 @@ correctDistance
   -> RayBeta
   -> Distance
 correctDistance (Distance wonky) (RayBeta rb) =
-  Distance $ wonky * cos (rb * pi / 180)
+  Distance $ wonky * cos (toRadians . Angle $ rb)

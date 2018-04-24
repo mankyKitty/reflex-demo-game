@@ -45,7 +45,7 @@ projectedSliceHeight s rc fov =
 
 -- |
 -- >>> mkFov (Height 200) (Width 320) (Angle 60)
--- FOV {_fovHeight = Height 200, _fovWidth = Width 320, _fovDistance = Distance 277.0, _fovAngle = Angle 60}
+-- FOV {_fovHeight = Height 200, _fovWidth = Width 320, _fovDistance = Distance 277.0, _fovAngle = Angle {_unAngle = 60.0}}
 mkFov :: Height -> Width -> Angle -> FOV
 mkFov h w a = FOV h w (calcFovDistance w a) a
 
@@ -61,7 +61,7 @@ calcFovDistance (Width w) (Angle a) =
   let
     w' = fromIntegral w
   in
-    Distance . fromIntegral . floor $ (w' / 2) / tan ((a / 2) * pi / 180)
+    Distance . fromIntegral . floor $ (w' / 2) / tan (toRadians . Angle $ (a / 2))
 
 inBnds :: (Word8, Word8) -> Bool
 inBnds (x,y) = b x && b y

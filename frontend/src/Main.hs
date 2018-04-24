@@ -27,6 +27,8 @@ import           Reflex.Dom                       (MonadWidget)
 import qualified Reflex.Dom                       as RD
 import           Reflex.Dom.Core                  (mainWidget)
 
+import Data.Text (Text)
+import Data.Map                         (Map)
 import qualified Data.Map                         as Map
 
 import           JSDOM.CanvasRenderingContext2D   (CanvasRenderingContext2D)
@@ -74,54 +76,45 @@ renderRayCast cx fov s rIth rc = do
   C.moveTo cx (realToFrac x) (realToFrac y)
   C.lineTo cx (realToFrac x) (realToFrac $ y + sliceHeight)
 
-data MvAngle
-  = Incr
-  | Decr
+angleBetweenRays :: Double
+angleBetweenRays = 60/320
 
-mvAngle :: MvAngle -> Double -> Double
-mvAngle Decr a | a == 359.0 = 0.0
-               | otherwise = a + 1
-mvAngle Incr a | a == 0.0 = 359.0
-               | otherwise = a - 1
+halfFOV :: T.Angle
+halfFOV = T.Angle 30
+
+sqrSize :: Int
+sqrSize = 64
+
+p :: Double
+p = fromIntegral sqrSize * 3 + 32
+
+player :: T.P
+player = T.P (V2 p (p - fromIntegral sqrSize)) (Angle 60)
+
+fov :: T.FOV
+fov = mkFov (Height 200) (Width 320) (Angle 60)
+
+canvasAttrs :: Map Text Text
+canvasAttrs = Map.fromList
+  [ ("width", "512")
+  , ("height", "512")
+  ]
+
+cameraAttrs :: Map Text Text
+cameraAttrs = Map.fromList
+  [ ("width", "320")
+  , ("height", "200")
+  -- , ("style", "transform-origin: 0 0;transform: scale(1.5, 1.5);")
+  ]
 
 app :: MonadWidget t m => m ()
 app = do
   let
-    angleBetweenRays :: Double
-    angleBetweenRays = 60/320
-
-    halfFOV :: T.Angle
-    halfFOV = T.Angle 30
-
-    sqrSize :: Int
-    sqrSize = 64
-
-    p :: Double
-    p = fromIntegral sqrSize * 3 + 32
-
-    player = T.P (V2 p (p - fromIntegral sqrSize)) (Angle 60)
-
-    canvasAttrs = Map.fromList
-      [ ("width", "512")
-      , ("height", "512")
-      ]
-
-    cameraAttrs = Map.fromList
-      [ ("width", "320")
-      , ("height", "200")
-      ]
-
-  (outerEle, (innerEle, _)) <- RD.el' "game-screen" $
+  (innerEle, _) <- 
     RD.elAttr' "canvas" cameraAttrs RD.blank
 
   dCamCx <- (fmap . fmap) CD._canvasInfo_context $
     CD.dContext2d (CD.CanvasConfig innerEle mempty)
-
-  let
-    fov = mkFov
-      (Height 200)
-      (Width 320)
-      (Angle 60)
 
   (e, _) <- RD.elAttr' "canvas" canvasAttrs RD.blank
   eDraw <- RD.button "Go"
@@ -188,8 +181,6 @@ app = do
 
     buildRays ply = (\i -> (rayCast ply i, i)) <$> [0..319]
 
-    rays' = buildRays player
-
     rays cx rs = do
       C.beginPath cx
       traverse_ (\(rc,i) -> renderRayCast cx fov sqrSize i rc) rs
@@ -221,13 +212,23 @@ app = do
     , (T.playerFacing %~ (`T.addAngle` (Angle 1))) <$ eRightTurn
     ]
 
+  dCanvasPlayer <- R.foldDyn ($) player $ R.mergeWith (.)
+    [ (T.playerFacing %~ (`T.addAngle` (Angle 1))) <$ eLeftTurn
+    , (T.playerFacing %~ (`T.subtractAngle` (Angle 1))) <$ eRightTurn
+    ]
+
   let
-    dFstRay = (^. T.playerFacing . to (`T.subtractAngle` halfFOV) . to (Ray . T._unAngle)) <$> dPlayer
+    dFstRay = fmap
+      (^. T.playerFacing 
+      . to (`T.addAngle` halfFOV) 
+      . to (Ray . T._unAngle)
+      ) 
+      dCanvasPlayer
 
-    dHI = mkHorizInters <$> dFstRay <*> dPlayer
-    dVI = mkVertInters <$> dFstRay <*> dPlayer
+    dHI = mkHorizInters <$> dFstRay <*> dCanvasPlayer
+    dVI = mkVertInters <$> dFstRay <*> dCanvasPlayer
 
-  dRays <- R.holdDyn rays' $
+  dRays <- R.holdDyn (buildRays player) $
     buildRays <$> R.updated dPlayer
 
   let eMoved = R.leftmost
@@ -247,6 +248,9 @@ app = do
 
   RD.divClass "DEBUG" $
     RD.display dPlayer
+
+  RD.divClass "DEBUG" $
+    RD.display dCanvasPlayer
 
   RD.divClass "DEBUG" $
     RD.display dFstRay
@@ -281,23 +285,24 @@ renderPlayer :: T.P -> DrawM ()
 renderPlayer (T.P pos face) = do
   cx <- get
   C.save cx
+
+  C.translate cx (pos ^. _x . to realToFrac) (pos ^. _y . to realToFrac)
   let
-    faceRadians = realToFrac $ (T._unAngle face) * pi / 180
+    faceRadians = realToFrac $ T.toRadians face
     rCos = cos faceRadians
     rSin = sin faceRadians
 
-  C.transform cx rCos rSin (negate rSin) rCos
-    (pos ^. _x . to realToFrac)
-    (pos ^. _y . to realToFrac)
+  C.rotate cx faceRadians
+  -- C.transform cx rCos rSin (negate rSin) rCos 0 0
 
   C.setStrokeStyle cx ("red" :: JSString)
   C.strokeRect cx 0 0 10 10
 
-  C.setLineWidth cx 2
+  C.setLineWidth cx 5
 
   C.beginPath cx
   C.moveTo cx 0 0
-  C.lineTo cx 0 256
+  C.lineTo cx 100 0
   C.closePath cx
   C.stroke cx
   C.restore cx
