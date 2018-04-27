@@ -26,6 +26,15 @@ import           Types
 -- >>> let player3 = P (V2 224 224) (Angle 237.0)
 -- >>> let ray3 = Ray 207.0
 
+-- | Create the Ray to be cast
+createRay
+  :: Angle
+  -> Double
+  -> Angle
+  -> Ray
+createRay halfFOV rayAngle playerFace =
+  Ray . _unAngle $ subtractAngle (addAngle playerFace halfFOV) (Angle rayAngle)
+
 -- |
 -- Finding the coordinate of A.
 --  If the ray is facing up
@@ -264,7 +273,7 @@ toTheWall stepFn ray rm s v@(V2 x y) =
     Just sq@Sqr { _sqType = Wall } -> Just (V2 (fromIntegral x) (fromIntegral y), sq)
     Just _                         -> toTheWall stepFn ray rm s (stepFn v s ray)
     Nothing                        -> Nothing
-    
+
 
 -- |
 -- >>> distanceTo player (Just (V2 187 63, Sqr Wall 64))

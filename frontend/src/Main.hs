@@ -4,12 +4,9 @@
 {-# LANGUAGE TupleSections         #-}
 module Main (main) where
 
-import qualified Control.Monad.Par                as Par
-import qualified Control.Monad.Par.Combinator     as Par
-
 import Control.Applicative ((<|>))
 
-import           Control.Lens                     (to, (+~), (.~), (^.), (%~),
+import           Control.Lens                     (to, (+~), (.~), (^.), (%~), imap,
                                                    _Wrapped)
 import           Control.Monad                    (void)
 
@@ -20,6 +17,8 @@ import           Data.Function                    ((&))
 import           Data.Functor                     (($>), (<$))
 import           Data.Maybe                       (catMaybes,mapMaybe)
 
+import Linear.Matrix (identity, M44)
+import Linear.V4 (_w)
 import           Linear.V2                        (V2 (..), _x, _y)
 
 import           Language.Javascript.JSaddle.Warp (run)
@@ -63,7 +62,7 @@ renderRayCast
   :: CanvasRenderingContext2D
   -> FOV
   -> Int
-  -> Double
+  -> Int
   -> RayCast
   -> JSM ()
 renderRayCast cx fov s rIth rc = do
@@ -73,12 +72,11 @@ renderRayCast cx fov s rIth rc = do
 
     sliceHeight = projectedSliceHeight s rc fov
 
-    x = (negate w/2) + rIth
+    x = (negate w/2) + (fromIntegral rIth)
     y = negate (sliceHeight/2)
 
   C.moveTo cx (realToFrac x) (realToFrac y)
   C.lineTo cx (realToFrac x) (realToFrac $ y + sliceHeight)
-
 
 screenWidth :: Double
 screenWidth = 320
@@ -98,16 +96,27 @@ angleBetweenRays = fovAngle / screenWidth
 halfFOV :: T.Angle
 halfFOV = T.Angle (fovAngle / 2)
 
-p :: Double
-p = fromIntegral sqrSize * 3 + 32
+rayList :: [Double]
+rayList = (angleBetweenRays *) <$> [0.. (screenWidth - 1)]
+
+betaRays :: [RayBeta]
+betaRays =
+  let
+    halfFOV' = _unAngle halfFOV
+    step = halfFOV' - angleBetweenRays
+  in
+    [ RayBeta rb | rb <- [halfFOV', step .. (negate halfFOV')] ]
 
 player :: T.P
-player = T.P (V2 p (p - fromIntegral sqrSize)) (Angle fovAngle)
+player = T.P (V2 p (p - s)) (Angle fovAngle)
+  where
+    s = fromIntegral sqrSize
+    p = s * 3 + 32
 
 fov :: T.FOV
-fov = mkFov 
+fov = mkFov
   (Height (floor screenHeight))
-  (Width (floor screenWidth)) 
+  (Width (floor screenWidth))
   (Angle fovAngle)
 
 canvasAttrs :: Map Text Text
@@ -122,6 +131,45 @@ cameraAttrs = Map.fromList
   , ("height", "240")
   -- , ("style", "transform-origin: 0 0;transform: scale(1.5, 1.5);")
   ]
+
+stepSquares
+  :: Room
+  -> Int
+  -> (V2 Int -> Int -> Ray -> V2 Int)
+  -> Ray
+  -> V2 Int
+  -> Maybe ((V2 Int,Sqr), V2 Int)
+stepSquares rm sqrS fn ray v@(V2 x y) =
+  (\s -> ((v,s), fn v sqrS ray)) <$> T.atPos (R.toRoomCoord sqrS x y) rm
+
+mkHorizInters, mkVertInters :: Ray -> T.P -> [(V2 Int, T.Sqr)]
+mkHorizInters r p =
+  let (T.HorizAX hx, T.HorizAY hy) = R.firstHorizontalIntersection r p sqrSize
+  in L.unfoldr (stepSquares T.room1 sqrSize R.stepHorizontalIntersection r) (V2 hx hy)
+mkVertInters r p =
+  let (T.VertAX vx, T.VertAY vy) = R.firstVerticalIntersection r p sqrSize
+  in L.unfoldr (stepSquares T.room1 sqrSize R.stepVerticalIntersection r) (V2 vx vy)
+
+drawInters
+  :: CanvasRenderingContext2D
+  -> V2 Int
+  -> JSM ()
+drawInters cx (V2 x y) =
+  C.fillRect cx (fromIntegral x) (fromIntegral y) 10 10
+
+renderMap p firstRay lastRay cx _ = do
+  renderRoom T.room1 cx
+  renderPlayer p cx
+
+  C.setFillStyle cx ("blue" :: JSString)
+  traverse_ (drawInters cx . fst) (mkHorizInters firstRay p)
+  C.setFillStyle cx ("green" :: JSString)
+  traverse_ (drawInters cx . fst) (mkVertInters firstRay p)
+
+  C.setFillStyle cx ("blue" :: JSString)
+  traverse_ (drawInters cx . fst) (mkHorizInters lastRay p)
+  C.setFillStyle cx ("green" :: JSString)
+  traverse_ (drawInters cx . fst) (mkVertInters lastRay p)
 
 app :: MonadWidget t m => m ()
 app = do
@@ -139,63 +187,18 @@ app = do
     <$> CD.dContext2d (CD.CanvasConfig e mempty)
 
   let
-    stepSquares
-      :: Room
-      -> Int
-      -> (V2 Int -> Int -> Ray -> V2 Int)
-      -> Ray
-      -> V2 Int
-      -> Maybe ((V2 Int,Sqr), V2 Int)
-    stepSquares rm sqrS fn ray v@(V2 x y) =
-      (\s -> ((v,s), fn v sqrS ray)) <$> T.atPos (R.toRoomCoord sqrS x y) rm
-
-    mkHorizInters r p =
+    rayCast p rIth rayAngle =
       let
-        (T.HorizAX hx, T.HorizAY hy) = R.firstHorizontalIntersection r p sqrSize
+        rA = p ^. T.playerFacing . to (R.createRay halfFOV rayAngle)
+
+        -- where RayBeta is the angle of the ray that is being cast relative to
+        -- the viewing angle. I can get away with this because we generate the
+        -- list of betaRays beforehand and we have a known quantity based on the `rayList`
+        rB = betaRays !! rIth
       in
-        L.unfoldr (stepSquares T.room1 sqrSize R.stepHorizontalIntersection r) (V2 hx hy)
+        (castSingleRay T.room1 sqrSize rA rB p, rIth)
 
-    mkVertInters r p =
-      let
-        (T.VertAX vx, T.VertAY vy) = R.firstVerticalIntersection r p sqrSize
-      in
-        L.unfoldr (stepSquares T.room1 sqrSize R.stepVerticalIntersection r) (V2 vx vy)
-
-    drawInters
-      :: CanvasRenderingContext2D
-      -> V2 Int
-      -> JSM ()
-    drawInters cx (V2 x y) =
-      C.fillRect cx (fromIntegral x) (fromIntegral y) 10 10
-
-    renderMap p firstRay lastRay cx _ = do
-      renderRoom T.room1 cx
-      renderPlayer p cx
-
-      C.setFillStyle cx ("blue" :: JSString)
-      traverse_ (drawInters cx . fst) (mkHorizInters firstRay p)
-      C.setFillStyle cx ("green" :: JSString)
-      traverse_ (drawInters cx . fst) (mkVertInters firstRay p)
-
-      C.setFillStyle cx ("blue" :: JSString)
-      traverse_ (drawInters cx . fst) (mkHorizInters lastRay p)
-      C.setFillStyle cx ("green" :: JSString)
-      traverse_ (drawInters cx . fst) (mkVertInters lastRay p)
-
-    rayCast p rIth =
-      let
-        rA = p ^. T.playerFacing
-          . to (T.addAngle halfFOV) 
-          . to (`T.subtractAngle` (T.Angle $ rIth * angleBetweenRays))
-          . to (Ray . T._unAngle)
-
-        -- where RayBeta is the angle of the ray that is being cast relative to the viewing angle.
-        rB = RayBeta $
-          (angleBetweenRays * rIth) - (angleBetweenRays * (_unAngle $ halfFOV))
-      in
-        castSingleRay T.room1 sqrSize rA rB p
-
-    buildRays ply = (\i -> (rayCast ply i, i)) <$> [0..(screenWidth - 1)]
+    buildRays ply = rayCast ply `imap` rayList
 
     rays cx rs = do
       C.beginPath cx
@@ -204,7 +207,7 @@ app = do
       C.stroke cx
 
     camRender
-      :: [(RayCast, Double)]
+      :: [(RayCast, Int)]
       -> CanvasRenderingContext2D
       -> Double
       -> JSM ()
@@ -218,8 +221,6 @@ app = do
       rays cx r
       C.restore cx
 
-    -- rays = catMaybes . Par.runPar $ Par.parMap (rayCast player) [0..319]
-
   eLeftBtn <- RD.button "Turn left a bit"
   eRightBtn <- RD.button "Turn right a bit"
 
@@ -228,15 +229,30 @@ app = do
     rotRight a = T.playerFacing %~ (`T.subtractAngle` a)
     rotLeft a = T.playerFacing %~ T.addAngle a
 
+    rotMat a =
+      let
+        rads = T.toRadians a
+      in
+        V2 (V2 (cos rads) (negate $ sin rads))
+           (V2 (sin rads) (cos rads))
+
+    forwardMove :: M44 Double
+    forwardMove = identity & _x . _w .~ 20
+
+    backwardMove :: M44 Double
+    backwardMove = identity & _y . _w .~ 20
+
     eLeft = RD.keypress RD.ArrowLeft wrapperEle <> eLeftBtn
     eRight = RD.keypress RD.ArrowRight wrapperEle <> eRightBtn
 
-    eForward = RD.keypress RD.ArrowUp wrapperEle
-    eBackward = RD.keypress RD.ArrowDown wrapperEle
+    -- eForward = RD.keypress RD.ArrowUp wrapperEle
+    -- eBackward = RD.keypress RD.ArrowDown wrapperEle
 
   dPlayer <- R.foldDyn ($) player $ R.mergeWith (.)
     [ rotLeft (Angle 2) <$ eLeft
     , rotRight (Angle 2) <$ eRight
+    -- , movePlayer (V2 (-2) 0) <$ eForward
+    -- , movePlayer (V2 2 0) <$ eBackward
     ]
 
   let
@@ -252,7 +268,7 @@ app = do
   dRays <- R.holdDyn (buildRays player) $
     buildRays <$> R.updated dPlayer
 
-  let 
+  let
     eMoved = eDraw <> (() <$ R.updated dPlayer)
 
   eRendered <- CD.drawWithCx dCx (renderMap <$> dPlayer <*> dFirstRay <*> dLastRay) eMoved
@@ -296,7 +312,7 @@ renderPlayer (T.P pos face) cx = do
     rSin = sin faceRadians
 
   C.rotate cx (-faceRadians)
-  
+
   C.setStrokeStyle cx ("red" :: JSString)
   C.strokeRect cx 0 0 10 10
 

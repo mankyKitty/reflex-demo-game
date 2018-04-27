@@ -20,8 +20,8 @@ import           GHC.Word     (Word8)
 newtype Height = Height Int deriving Show
 newtype Width  = Width Int deriving Show
 
-newtype Angle  = Angle 
-  { _unAngle :: Double 
+newtype Angle  = Angle
+  { _unAngle :: Double
   }
   deriving (Show, Eq, Ord)
 
@@ -93,6 +93,7 @@ mkRay a | a >= 0 && a < 360 = Just (Ray a)
 newtype RayBeta = RayBeta
   { unRayBeta :: Double
   }
+  deriving Show
 
 data RayCast = RayCast
   { _rayCastDistance :: Distance
