@@ -27,6 +27,7 @@ library
                      , containers
                      , reflex
                      , reflex-dom
+                     , monad-par
 
   hs-source-dirs:      src
 

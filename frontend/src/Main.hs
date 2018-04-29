@@ -17,7 +17,7 @@ import           Data.Function                    ((&))
 import           Data.Functor                     (($>), (<$))
 import           Data.Maybe                       (catMaybes,mapMaybe)
 
-import Linear.Matrix (identity, M44)
+import Linear.Matrix (identity, M44, (!*))
 import Linear.V4 (_w)
 import           Linear.V2                        (V2 (..), _x, _y)
 
@@ -49,13 +49,14 @@ import           DrawM                            (DrawM, runDrawM)
 
 import qualified RayCaster as R
 import           RayCaster                        (castSingleRay)
-import           RayWut                           (mkFov, projectedSliceHeight)
+import qualified RayWut as R
 
 import           Types                            (Angle (..), FOV (..),
                                                    Height (..), Ray (Ray),
                                                    RayBeta (RayBeta), RayCast,
                                                    Room (..), SqType (..),
                                                    Sqr (..), Width (..))
+
 import qualified Types                            as T
 
 renderRayCast
@@ -70,7 +71,7 @@ renderRayCast cx fov s rIth rc = do
     w = fov ^. T.fovWidth . _Wrapped . to fromIntegral
     h = fov ^. T.fovHeight . _Wrapped . to fromIntegral
 
-    sliceHeight = projectedSliceHeight s rc fov
+    sliceHeight = R.projectedSliceHeight s rc fov
 
     x = (negate w/2) + (fromIntegral rIth)
     y = negate (sliceHeight/2)
@@ -114,7 +115,7 @@ player = T.P (V2 p (p - s)) (Angle fovAngle)
     p = s * 3 + 32
 
 fov :: T.FOV
-fov = mkFov
+fov = R.mkFov
   (Height (floor screenHeight))
   (Width (floor screenWidth))
   (Angle fovAngle)
@@ -229,30 +230,26 @@ app = do
     rotRight a = T.playerFacing %~ (`T.subtractAngle` a)
     rotLeft a = T.playerFacing %~ T.addAngle a
 
-    rotMat a =
-      let
-        rads = T.toRadians a
-      in
-        V2 (V2 (cos rads) (negate $ sin rads))
-           (V2 (sin rads) (cos rads))
-
-    forwardMove :: M44 Double
-    forwardMove = identity & _x . _w .~ 20
-
-    backwardMove :: M44 Double
-    backwardMove = identity & _y . _w .~ 20
-
     eLeft = RD.keypress RD.ArrowLeft wrapperEle <> eLeftBtn
     eRight = RD.keypress RD.ArrowRight wrapperEle <> eRightBtn
 
-    -- eForward = RD.keypress RD.ArrowUp wrapperEle
-    -- eBackward = RD.keypress RD.ArrowDown wrapperEle
+    forwardVector p = R.rotationMatrix p !* (V2 10 0)
+    backwardVector p = R.rotationMatrix p !* (V2 (-10) 0)
+
+    moveForward p =
+      p & T.playerPosition +~ forwardVector p
+
+    moveBackward p =
+      p & T.playerPosition +~ backwardVector p
+    
+    eForward = RD.keypress RD.ArrowUp wrapperEle
+    eBackward = RD.keypress RD.ArrowDown wrapperEle
 
   dPlayer <- R.foldDyn ($) player $ R.mergeWith (.)
     [ rotLeft (Angle 2) <$ eLeft
     , rotRight (Angle 2) <$ eRight
-    -- , movePlayer (V2 (-2) 0) <$ eForward
-    -- , movePlayer (V2 2 0) <$ eBackward
+    , moveForward <$ eForward
+    , moveBackward <$ eBackward
     ]
 
   let
@@ -283,10 +280,11 @@ app = do
   RD.divClass "DEBUG" $
     RD.display dPlayer
 
-main :: IO ()
-main = run 3911 $ mainWidget app
-
-renderSqr :: V2 Double -> Sqr -> CanvasRenderingContext2D -> JSM ()
+renderSqr
+  :: V2 Double
+  -> Sqr
+  -> CanvasRenderingContext2D
+  -> JSM ()
 renderSqr pos sq cx = do
   C.setFillStyle cx sqColour
   C.fillRect cx (p _x) (p _y) sqS sqS
@@ -343,3 +341,6 @@ renderRoom (Room rm) cx =
               (xStep +) <$> rSqrs s o''
           ) o' sqs
       ) o rm
+
+main :: IO ()
+main = run 3911 $ mainWidget app

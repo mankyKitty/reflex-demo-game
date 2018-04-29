@@ -3,13 +3,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module RayWut where
 
-import           Prelude             (Bool, Double, Eq, Int, Num, Show (..),
+import           Prelude             (Bool, Double, Eq, Int, Num, Show (..), cos, sin, negate,
                                       floor, fromIntegral, otherwise, pi, tan, ceiling,
-                                      undefined, (&&), (*), (/), (<=), (>=))
+                                      undefined, (&&), (*), (/), (<=), (>=), (+), (-))
 
 import           Control.Applicative (Applicative)
 import           Control.Category    ((.))
-import           Control.Lens        (Index, IxValue, Ixed, ix, to, (.~), (^.),
+import           Control.Lens        (Index, IxValue, Ixed, ix, to, (.~), (^.), (%~),
                                       _Wrapped)
 import           Data.Function       (($), (&))
 import           Data.Functor        (fmap, (<$>))
@@ -18,6 +18,11 @@ import           GHC.Word            (Word8)
 
 import           Data.List           (replicate)
 import           Data.String         (unlines, unwords)
+
+import Linear.V3 (V3 (V3), _x,_y)
+import Linear.Matrix (M22,M33,M44,identity)
+import Linear.V2 (V2 (V2))
+import Linear.V4 (V4 (V4), _w)
 
 import           RayCaster
 import           Types
@@ -28,7 +33,16 @@ import           Types
 -- >>> let fov = mkFov (Height 200) (Width 320) (Angle 60)
 -- >>> let rCast = RayCast (Distance 330) (Sqr Wall 64)
 
--- |
+rotationMatrix
+  :: P
+  -> M22 Double
+rotationMatrix p =
+  let
+    rads = p ^. playerFacing . to toRadians
+  in
+    V2 (V2 (cos rads) (negate (sin rads)))
+       (V2 (sin rads) (cos rads))
+
 -- >>> projectedSliceHeight sqrSize rCast fov
 -- 54.0
 projectedSliceHeight
