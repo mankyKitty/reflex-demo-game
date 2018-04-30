@@ -22,12 +22,12 @@ library
 
   -- other-extensions:
   build-depends:       base >=4.9 && <4.11
-                     , lens
-                     , linear
-                     , containers
-                     , reflex
-                     , reflex-dom
-                     , monad-par
+                     , lens > 4.11 && < 5
+                     , linear >1.20 && <1.30
+                     , containers >0.5 && <0.6
+                     , reflex == 0.5
+                     , reflex-dom == 0.4
+                     , monad-par >0.3 && <0.4
 
   hs-source-dirs:      src
 
