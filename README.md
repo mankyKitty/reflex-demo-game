@@ -9,7 +9,8 @@ arrow keys to move/look around. You have to click the top canvas before the keys
 will register. Because I didn't do a global bind on the key events, only key
 events that are triggered from the canvas.
 
-[A screenshot](screenshot.png)
+![A screenshot](screenshot.png "A screenshot showing rendering screen and map
+display)
 
 ### To Build
 
