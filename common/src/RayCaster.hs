@@ -3,8 +3,9 @@
 module RayCaster where
 
 import           Control.Applicative (liftA2)
-import           Control.Lens        (Lens', each, makeLenses, over, to, view,
-                                      (%~), (+~), (^.))
+import           Control.Lens        (Lens', both, each, makeLenses, over,
+                                      preview, to, view, (%~), (+~), (^.), _2,
+                                      _head)
 
 import qualified Linear.Metric       as LM
 import           Linear.V2
@@ -182,6 +183,38 @@ horizontalIntersectionStepSize = directionStepSize HorizStep fst
 verticalIntersectionStepSize :: Ray -> Int -> VertStep
 verticalIntersectionStepSize = directionStepSize VertStep snd
 
+horizontalStep :: Int -> Ray -> V2 Int
+horizontalStep s r@(Ray a) =
+  let
+    d = snd $ rayDir r
+
+    floop n
+      | n < 0 && d == R = negate n
+      | n < 0 && d == L = n
+      | d == L          = negate n
+      | otherwise       = n
+
+    (HorizStep ya) = horizontalIntersectionStepSize r s
+    xa = floop . floor $ (fromIntegral s) / tan (toRadians . Angle $ a)
+  in
+    V2 xa ya
+
+verticalStep :: Int -> Ray -> V2 Int
+verticalStep s r@(Ray a) =
+  let
+    d = fst $ rayDir r
+
+    floop n
+      | n < 0 && d == D = negate n
+      | n < 0 && d == U = n
+      | d == U          = negate n
+      | otherwise       = n
+
+    (VertStep xa) = verticalIntersectionStepSize r s
+    ya = floop . floor $ (fromIntegral s) * tan (toRadians . Angle $ a)
+  in
+    V2 xa ya
+
 -- |
 -- >>> stepHorizontalIntersection (V2 115 191) sqrSize (Ray 60.0)
 -- V2 151 127
@@ -200,21 +233,8 @@ stepHorizontalIntersection
   -> Int
   -> Ray
   -> V2 Int
-stepHorizontalIntersection v s ray@(Ray a) =
-  let
-    d = snd . rayDir $ ray
-
-    floop n
-      | n < 0 && d == R = negate n
-      | n < 0 && d == L = n
-      | d == L          = negate n
-      | otherwise       = n
-
-    (HorizStep ya) = horizontalIntersectionStepSize ray s
-    xa = floop . floor $ (fromIntegral s) / tan (toRadians . Angle $ a)
-  in
-  v & _x +~ xa
-    & _y +~ ya
+stepHorizontalIntersection v s ray =
+  v + horizontalStep s ray
 
 -- |
 -- >>> stepVerticalIntersection (V2 128 205) sqrSize (Ray 60.0)
@@ -232,21 +252,8 @@ stepVerticalIntersection
   -> Int
   -> Ray
   -> V2 Int
-stepVerticalIntersection v s r@(Ray a) =
-  let
-    d = fst . rayDir $ r
-
-    floop n
-      | n < 0 && d == D = negate n
-      | n < 0 && d == U = n
-      | d == U          = negate n
-      | otherwise       = n
-
-    ya = floop . floor $ (fromIntegral s) * tan (toRadians . Angle $ a)
-    (VertStep xa) = verticalIntersectionStepSize r s
-  in
-  v & _x +~ xa
-    & _y +~ ya
+stepVerticalIntersection v s r =
+  v + verticalStep s r
 
 -- |
 -- >>> toRoomCoord sqrSize 115 191
@@ -261,19 +268,12 @@ toRoomCoord
 toRoomCoord s x y =
   V2 (x `div` s) (y `div` s)
 
-toTheWall
-  :: (V2 Int -> Int -> Ray -> V2 Int)
-  -> Ray
-  -> Room
-  -> Int
+toRoomCoord'
+  :: Int
   -> V2 Int
-  -> Maybe (V2 Double, Sqr)
-toTheWall stepFn ray rm s v@(V2 x y) =
-  case atPos (toRoomCoord s x y) rm of
-    Just sq@Sqr { _sqType = Wall } -> Just (V2 (fromIntegral x) (fromIntegral y), sq)
-    Just _                         -> toTheWall stepFn ray rm s (stepFn v s ray)
-    Nothing                        -> Nothing
-
+  -> V2 Int
+toRoomCoord' s xy =
+  over each (`div` s) xy
 
 -- |
 -- >>> distanceTo player (Just (V2 187 63, Sqr Wall 64))
@@ -318,28 +318,17 @@ firstVerticalIntersection ray p s =
   in
     (vx, vy)
 
--- |
--- >>> horizontalToWall (Ray 60.0) room1 64 (V2 256 128)
--- Just (V2 328.0 0.0,Sqr {_sqType = Wall, _sqSide = 64})
-horizontalToWall
-  :: Ray
+toTheWall
+  :: V2 Int
   -> Room
   -> Int
   -> V2 Int
   -> Maybe (V2 Double, Sqr)
-horizontalToWall ray rm s v2h =
-  toTheWall stepHorizontalIntersection ray rm s v2h
-
--- >>> verticalToWall (Ray 60.0) room1 64 (V2 128 205)
--- Just (V2 566.0 48.0,Sqr {_sqType = Wall, _sqSide = 64})
-verticalToWall
-  :: Ray
-  -> Room
-  -> Int
-  -> V2 Int
-  -> Maybe (V2 Double, Sqr)
-verticalToWall ray rm s v2v =
-  toTheWall stepVerticalIntersection ray rm s v2v
+toTheWall step rm s currentV2 =
+  case atPos (toRoomCoord' s currentV2) rm of
+    Just sq@Sqr { _sqType = Wall } -> Just (over each fromIntegral currentV2, sq)
+    Just _                         -> toTheWall step rm s (currentV2 + step)
+    Nothing                        -> Nothing
 
 finaliseRay
   :: P
@@ -366,8 +355,8 @@ castSingleRay rm s ray rayBeta p =
     (HorizAX haX1, HorizAY haY1) = firstHorizontalIntersection ray p s
     (VertAX vaX1, VertAY vaY1) = firstVerticalIntersection ray p s
 
-    mHWallPos = horizontalToWall ray rm s (V2 haX1 haY1)
-    mVWallPos = verticalToWall ray rm s (V2 vaX1 vaY1)
+    mHWallPos = toTheWall (horizontalStep s ray) rm s (V2 haX1 haY1)
+    mVWallPos = toTheWall (verticalStep s ray) rm s (V2 vaX1 vaY1)
 
     hDist = distanceTo p mHWallPos
     vDist = distanceTo p mVWallPos

@@ -233,15 +233,14 @@ app = do
     eLeft = RD.keypress RD.ArrowLeft wrapperEle <> eLeftBtn
     eRight = RD.keypress RD.ArrowRight wrapperEle <> eRightBtn
 
-    forwardVector p = R.rotationMatrix p !* (V2 10 0)
-    backwardVector p = R.rotationMatrix p !* (V2 (-10) 0)
+    playerSpeed = 10
 
     moveForward p =
-      p & T.playerPosition +~ forwardVector p
+      R.movePlayer p T.Forward playerSpeed
 
     moveBackward p =
-      p & T.playerPosition +~ backwardVector p
-    
+      R.movePlayer p T.Backward playerSpeed
+
     eForward = RD.keypress RD.ArrowUp wrapperEle
     eBackward = RD.keypress RD.ArrowDown wrapperEle
 

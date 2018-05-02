@@ -54,6 +54,11 @@ data FOV = FOV
   }
   deriving Show
 
+data Move
+  = Forward
+  | Backward
+  deriving (Show, Eq)
+
 data SqType
   = Wall
   | Floor
